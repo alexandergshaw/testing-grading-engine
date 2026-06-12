@@ -7,8 +7,14 @@ tried in order:
    first cell is the criterion, rightmost points-looking cell is the points.
 2. Inline points: "Criterion name (10 points)", "Criterion name 10 pts",
    "Criterion name / 10".
-3. Two-line pairs: criterion name on one line, "10 pts" (optionally with
+3. Percent weights: criterion name followed by "25% of total grade" (on the
+   same or the next line); bare rating-level lines like "100%" / "75%" and
+   their descriptions are ignored. Points = the percent weight.
+4. Two-line pairs: criterion name on one line, "10 pts" (optionally with
    rating text like "Full Marks") on the next.
+
+Duplicate criterion names (e.g. an LMS footer that repeats the criteria
+column) are collapsed to the first occurrence.
 
 Which automated check each criterion maps to is suggested separately by
 grading.suggest and confirmed by the user on the review page.
@@ -24,6 +30,8 @@ _NUM = r"\d+(?:\.\d+)?"
 _JUNK_NAMES = {
     "criteria",
     "criterion",
+    "criteria column",
+    "criterion column",
     "ratings",
     "rating",
     "pts",
@@ -51,8 +59,18 @@ _INLINE_PATTERNS = (
 # A points-only line, optionally followed by rating text ("5 pts Full Marks")
 _PTS_LINE = re.compile(rf"^\s*({_NUM})\s*{_PTS_WORD}\b.*$", re.I)
 _RATING_NOISE = re.compile(
-    r"^(full marks|no marks|partial(?: credit)?|excellent|good|fair|poor|ratings?)$", re.I
+    r"^(full marks|no marks|partial(?: credit)?|excellent|good|fair|poor|satisfactory"
+    r"|unsatisfactory|exemplary|proficient|developing|emerging|beginning"
+    r"|needs improvement|ratings?)$",
+    re.I,
 )
+
+# Percent-weight rubrics: "25% of total grade" after (or appended to) the
+# criterion name; "100%" / "75%" rating-level lines are noise.
+_GRADE_OF = r"%\s*of\s+(?:the\s+)?(?:total\s+)?grade\b"
+_WEIGHT_LINE = re.compile(rf"^\s*(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
+_WEIGHT_INLINE = re.compile(rf"^(?P<name>.+?)[\s\-–—:|,]+(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
+_BARE_PERCENT = re.compile(rf"^\s*{_NUM}\s*%\s*$")
 
 
 @dataclass(frozen=True)
@@ -110,6 +128,33 @@ def _parse_inline(text: str) -> list[DraftCriterion]:
     return out
 
 
+def _parse_percent_weights(text: str) -> list[DraftCriterion]:
+    out: list[DraftCriterion] = []
+    prev: str | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = _WEIGHT_LINE.match(line)
+        if m:
+            if prev is not None:
+                out.append(DraftCriterion(prev, float(m.group("pts"))))
+                prev = None
+            continue
+        m = _WEIGHT_INLINE.match(line)
+        if m and not _is_junk(m.group("name")):
+            out.append(DraftCriterion(_clean(m.group("name")), float(m.group("pts"))))
+            prev = None
+            continue
+        if _BARE_PERCENT.match(line) or _RATING_NOISE.match(line) or _is_junk(line):
+            continue
+        # the weight line directly follows the criterion name, so the most
+        # recent non-noise line is the name; description prose in between
+        # rating levels never immediately precedes a weight line
+        prev = _clean(line)
+    return out
+
+
 def _parse_two_line(text: str) -> list[DraftCriterion]:
     out: list[DraftCriterion] = []
     prev: str | None = None
@@ -127,13 +172,26 @@ def _parse_two_line(text: str) -> list[DraftCriterion]:
     return out
 
 
+def _dedupe(rows: list[DraftCriterion]) -> list[DraftCriterion]:
+    seen: set[str] = set()
+    out = []
+    for row in rows:
+        key = row.name.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(row)
+    return out
+
+
 def parse_pasted_text(text: str) -> list[DraftCriterion]:
     text = text.replace("\r\n", "\n")
+    rows: list[DraftCriterion] = []
     if "\t" in text:
         rows = _parse_tsv(text)
-        if rows:
-            return rows
-    rows = _parse_inline(text)
-    if rows:
-        return rows
-    return _parse_two_line(text)
+    if not rows:
+        rows = _parse_inline(text)
+    if not rows:
+        rows = _parse_percent_weights(text)
+    if not rows:
+        rows = _parse_two_line(text)
+    return _dedupe(rows)

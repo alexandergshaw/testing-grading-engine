@@ -118,7 +118,8 @@ def parse_paste():
             [
                 "Couldn't find any criteria in the pasted text. Expected an LMS table copy "
                 "(tab-separated), lines like \"Criterion name (10 points)\" or "
-                "\"Criterion name 10 pts\", or a criterion line followed by a points line."
+                "\"Criterion name 10 pts\", percent weights like \"25% of total grade\" "
+                "after each criterion, or a criterion line followed by a points line."
             ],
             status=400,
         )
