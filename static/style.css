@@ -57,6 +57,15 @@ code {
 }
 .notice.warn { border-color: #f0c36d; color: #92600a; }
 
+#key-bar input {
+  margin: 0 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
 form {
   display: grid;
   gap: 1rem;
@@ -187,6 +196,7 @@ table.review input, table.review select {
   font-size: 0.85rem;
   background: #fff;
 }
+table.review input::placeholder { color: #9ca3af; font-style: italic; }
 table.review input.narrow { min-width: 3.5rem; width: 4rem; }
 table.review td.grow { min-width: 14rem; }
 table.review td.rule { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }

@@ -52,6 +52,31 @@ class GradingResult:
     def to_table_rows(self) -> list[StudentResult]:
         return sorted(self.students, key=lambda s: s.student.lower())
 
+    def to_dict(self) -> dict:
+        return {
+            "result_id": self.result_id,
+            "criteria": list(self.criterion_names),
+            "students": [
+                {
+                    "student": s.student,
+                    "total": s.total,
+                    "possible": s.possible,
+                    "criteria": [
+                        {
+                            "criterion": c.criterion,
+                            "passed": c.passed,
+                            "points_earned": c.points_earned,
+                            "points_possible": c.points_possible,
+                            "detail": c.detail,
+                        }
+                        for c in s.criteria
+                    ],
+                }
+                for s in self.to_table_rows()
+            ],
+            "warnings": list(self.warnings),
+        }
+
     def to_csv(self) -> str:
         buf = io.StringIO()
         writer = csv.writer(buf, lineterminator="\n")

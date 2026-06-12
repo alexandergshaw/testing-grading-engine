@@ -42,6 +42,59 @@ it. Two platform limits to know about:
 Note the deployed URL is public — there is no auth. Use Vercel's deployment
 protection if that matters.
 
+## API
+
+The grading engine is exposed as a JSON API under `/api/v1`. **The browser UI
+is just another client of these endpoints** — it has no grading routes of its
+own, so anything the UI can do, your app can do.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/grade` | Grade a zip against a rubric. Returns the full result JSON (or CSV with `?format=csv`). |
+| `POST /api/v1/rubric/parse` | Parse pasted LMS rubric text into criteria with suggested checks. |
+| `GET /api/v1/checks` | The check registry (names, required params, descriptions). |
+| `GET /api/v1/health` | Liveness + environment (exec enabled, upload limit, auth required). |
+
+`POST /grade` takes `multipart/form-data` with a `submissions` zip and exactly
+one rubric source:
+
+- **`rubric_csv`** — the canonical CSV, as an uploaded file or a string field;
+- **`rubric_json`** — a JSON array of `{criterion, points, check_type, target,
+  params}` objects (`params` may be a `key=value;…` string or an object) —
+  use this when your app does its own review step after `/rubric/parse`;
+- **`rubric_text`** — a raw LMS paste. Criteria the rule table can't map to a
+  check are **excluded from scoring** and listed in `unmapped_criteria` (with
+  a warning) — never guessed.
+
+```powershell
+# CSV rubric
+curl -s -X POST http://127.0.0.1:5000/api/v1/grade `
+  -F "submissions=@samples/sample_submissions.zip" `
+  -F "rubric_csv=@samples/rubric_python.csv"
+
+# Pasted LMS text, grades CSV back
+curl -s -X POST "http://127.0.0.1:5000/api/v1/grade?format=csv" `
+  -F "submissions=@samples/sample_submissions.zip" `
+  -F "rubric_text=Submitted main.py 5 pts"
+
+# Parse-then-grade with full control
+curl -s -X POST http://127.0.0.1:5000/api/v1/rubric/parse `
+  -H "Content-Type: application/json" -d "{\"rubric_text\": \"Uses the math module 10 pts\"}"
+```
+
+Success response (abridged): `{"criteria": [...], "students": [{"student",
+"total", "possible", "criteria": [{"criterion", "passed", "points_earned",
+"points_possible", "detail"}]}], "warnings": [], "unmapped_criteria": [],
+"csv": "..."}` — the `csv` field is rendered from the same result object as
+the rest of the payload. Errors always use `{"error": "<code>",
+"messages": [...]}` with proper status codes (400/401/413).
+
+**Auth**: set the `GRADING_API_KEY` env var and every endpoint except
+`/health` requires a matching `X-API-Key` header. The UI prompts for the key
+and stores it in localStorage. **CORS**: set `GRADING_CORS_ORIGINS` to a
+comma-separated origin list (or `*`) if browser apps on other origins will
+call the API.
+
 ## Pasting a rubric from your LMS
 
 Instead of writing a CSV, you can copy a rubric straight out of your LMS and

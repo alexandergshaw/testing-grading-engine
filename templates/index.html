@@ -7,15 +7,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<main>
+<main class="wide">
   <h1>Assignment Grading Engine</h1>
-  <p class="sub">Deterministic, rule-based grading. No AI involved.</p>
+  <p class="sub">Deterministic, rule-based grading. No AI involved. This UI is a client of the public <code>/api/v1</code> API.</p>
 
-  {% if errors %}
-    <ul class="errors">
-      {% for m in errors %}<li>{{ m }}</li>{% endfor %}
-    </ul>
-  {% endif %}
+  <div id="key-bar" class="notice warn" hidden>
+    This deployment requires an API key.
+    <input id="api-key" type="password" placeholder="X-API-Key">
+    <button id="save-key" class="secondary" type="button">Save key</button>
+  </div>
+
+  <ul class="errors" id="errors" hidden></ul>
 
   {% if on_vercel %}
     <p class="notice">Running on Vercel: execution checks (<code>python_runs</code>, <code>run_command</code>, <code>output_contains</code>) are always disabled here, and uploads are limited to 4&nbsp;MB. Run the app locally for those.</p>
@@ -25,79 +27,99 @@
     <p class="notice">Code execution is disabled, so execution checks (<code>python_runs</code>, <code>run_command</code>, <code>output_contains</code>) are marked failed. Set <code>GRADING_ALLOW_EXEC=1</code> before starting the server to enable them.</p>
   {% endif %}
 
-  <form action="{{ url_for('grade') }}" method="post" enctype="multipart/form-data">
-    <label class="dropzone">
-      <span class="dz-title">Submissions zip</span>
-      <span class="dz-hint">One folder per student</span>
-      <input type="file" name="submissions" accept=".zip" required>
-    </label>
-    <label class="dropzone">
-      <span class="dz-title">Rubric CSV</span>
-      <span class="dz-hint">criterion,points,check_type,target,params</span>
-      <input type="file" name="rubric" accept=".csv" required>
-    </label>
-    <button type="submit">Grade</button>
-  </form>
+  <section id="view-upload">
+    <form id="csv-form">
+      <label class="dropzone">
+        <span class="dz-title">Submissions zip</span>
+        <span class="dz-hint">One folder per student</span>
+        <input type="file" id="csv-zip" accept=".zip" required>
+      </label>
+      <label class="dropzone">
+        <span class="dz-title">Rubric CSV</span>
+        <span class="dz-hint">criterion,points,check_type,target,params</span>
+        <input type="file" id="csv-rubric" accept=".csv" required>
+      </label>
+      <button type="submit">Grade</button>
+    </form>
 
-  <h2 class="divider">or paste a rubric from your LMS</h2>
-  <form action="{{ url_for('parse_paste') }}" method="post" class="paste-form">
-    <textarea name="rubric_text" rows="8" placeholder="Paste rubric text copied from your LMS, e.g.
+    <h2 class="divider">or paste a rubric from your LMS</h2>
+    <form id="paste-form">
+      <textarea id="rubric-text" rows="8" placeholder="Paste rubric text copied from your LMS, e.g.
 
 Code compiles without errors&#9;10 pts
 Defines a function called calculate_average&#9;15 pts
 README at least 50 words&#9;10 pts" required></textarea>
-    <p class="dz-hint">Parsed deterministically (no AI): recognizes LMS table copies (tab-separated), &ldquo;Criterion (10 points)&rdquo;, &ldquo;Criterion &hellip; 10 pts&rdquo;, percent weights (&ldquo;25% of total grade&rdquo;), D2L/Brightspace rating blocks with &ldquo;Criterion Score &hellip; /20 pts&rdquo;, and name-then-points lines. You review the reconstructed rubric before anything is graded.</p>
-    <button type="submit">Parse rubric</button>
-  </form>
+      <p class="dz-hint">Parsed deterministically (no AI): recognizes LMS table copies (tab-separated), &ldquo;Criterion (10 points)&rdquo;, &ldquo;Criterion &hellip; 10 pts&rdquo;, percent weights (&ldquo;25% of total grade&rdquo;), D2L/Brightspace rating blocks with &ldquo;Criterion Score &hellip; /20 pts&rdquo;, and name-then-points lines. You review the reconstructed rubric before anything is graded.</p>
+      <button type="submit">Parse rubric</button>
+    </form>
 
-  <details>
-    <summary>Rubric CSV format</summary>
-    <p>Five columns, same for every assignment — only the rows change:</p>
-    <p><code>criterion,points,check_type,target,params</code></p>
-    <ul class="schema">
-      <li><strong>criterion</strong> — display name; becomes a column in the grades CSV</li>
-      <li><strong>points</strong> — awarded all-or-nothing when the check passes</li>
-      <li><strong>check_type</strong> — one of the checks below</li>
-      <li><strong>target</strong> — file glob relative to each student folder (e.g. <code>*.py</code>, <code>index.html</code>)</li>
-      <li><strong>params</strong> — <code>key=value</code> pairs separated by <code>;</code></li>
-    </ul>
-    <table class="registry">
-      <thead><tr><th>check_type</th><th>required params</th><th>what it checks</th></tr></thead>
-      <tbody>
-        {% for check in checks %}
-        <tr>
-          <td><code>{{ check.name }}</code></td>
-          <td>{% for p in check.required_params %}<code>{{ p }}=</code> {% else %}&mdash;{% endfor %}</td>
-          <td>{{ check.description }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </details>
+    <details>
+      <summary>Rubric CSV format</summary>
+      <p>Five columns, same for every assignment &mdash; only the rows change:</p>
+      <p><code>criterion,points,check_type,target,params</code></p>
+      <ul class="schema">
+        <li><strong>criterion</strong> &mdash; display name; becomes a column in the grades CSV</li>
+        <li><strong>points</strong> &mdash; awarded all-or-nothing when the check passes</li>
+        <li><strong>check_type</strong> &mdash; one of the checks below</li>
+        <li><strong>target</strong> &mdash; file glob relative to each student folder (e.g. <code>*.py</code>, <code>index.html</code>)</li>
+        <li><strong>params</strong> &mdash; <code>key=value</code> pairs separated by <code>;</code></li>
+      </ul>
+      <table class="registry">
+        <thead><tr><th>check_type</th><th>required params</th><th>what it checks</th></tr></thead>
+        <tbody>
+          {% for check in checks %}
+          <tr>
+            <td><code>{{ check.name }}</code></td>
+            <td>{% for p in check.required_params %}<code>{{ p }}=</code> {% else %}&mdash;{% endfor %}</td>
+            <td>{{ check.description }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <section id="view-review" hidden>
+    <h2>Review Rubric</h2>
+    <p class="sub" id="review-summary"></p>
+    <div class="table-wrap">
+      <table class="review">
+        <thead>
+          <tr><th>Criterion</th><th>Points</th><th>Check</th><th>Target (glob)</th><th>Params</th><th>Matched rule</th></tr>
+        </thead>
+        <tbody id="review-rows"></tbody>
+      </table>
+    </div>
+    <p class="hint">Highlighted rows need attention: pick a check or fill in its required params. Params are <code>key=value</code> pairs separated by <code>;</code>. Target is a file glob relative to each student folder.</p>
+    <label class="dropzone">
+      <span class="dz-title">Submissions zip</span>
+      <span class="dz-hint">One folder per student</span>
+      <input type="file" id="review-zip" accept=".zip">
+    </label>
+    <p class="actions">
+      <button id="review-grade" type="button">Grade</button>
+      <button id="dl-rubric" class="secondary" type="button">Download rubric CSV</button>
+      <button id="review-back" class="secondary" type="button">Start over</button>
+    </p>
+  </section>
+
+  <section id="view-results" hidden>
+    <h2>Grading Results</h2>
+    <p class="sub" id="results-summary"></p>
+    <ul class="warnings" id="warnings" hidden></ul>
+    <p class="actions">
+      <button id="dl-grades" type="button">Download grades.csv</button>
+      <button id="results-back" class="secondary" type="button">Grade another</button>
+    </p>
+    <div class="table-wrap">
+      <table class="results">
+        <thead id="results-head"></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+    <p class="hint">Hover a cell to see why the check passed or failed. The CSV download comes from the same API response as this table.</p>
+  </section>
 </main>
-<script>
-  // Progressive enhancement only: show the chosen filename and highlight on drag.
-  document.querySelectorAll(".dropzone").forEach(function (zone) {
-    var input = zone.querySelector("input");
-    input.addEventListener("change", function () {
-      if (input.files.length) {
-        zone.querySelector(".dz-hint").textContent = input.files[0].name;
-        zone.classList.add("filled");
-      }
-    });
-    ["dragenter", "dragover"].forEach(function (ev) {
-      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add("dragover"); });
-    });
-    ["dragleave", "drop"].forEach(function (ev) {
-      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove("dragover"); });
-    });
-    zone.addEventListener("drop", function (e) {
-      if (e.dataTransfer.files.length) {
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event("change"));
-      }
-    });
-  });
-</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
