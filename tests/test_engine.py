@@ -49,6 +49,9 @@ def test_crashing_check_becomes_error_detail(tmp_path):
 
 
 def test_flask_smoke(tmp_path):
+    import re
+    import urllib.parse
+
     import app as app_module
 
     buf = io.BytesIO()
@@ -70,8 +73,38 @@ def test_flask_smoke(tmp_path):
     page = resp.get_data(as_text=True)
     assert "alice" in page and "bob" in page
 
-    result_id, result = next(reversed(app_module.RESULTS.items()))
-    download = client.get(f"/download/{result_id}.csv")
-    assert download.status_code == 200
-    assert download.get_data(as_text=True) == result.to_csv()
-    assert client.get("/download/nonexistent.csv").status_code == 404
+    # The CSV download is embedded in the results page as a data: URI and must
+    # match the table's source exactly.
+    match = re.search(r'href="data:text/csv;charset=utf-8,([^"]+)"', page)
+    assert match, "embedded CSV download link not found"
+    csv_text = urllib.parse.unquote(match.group(1))
+    assert csv_text == (
+        "Student,Has main.py,Defines avg,Total,Possible\n"
+        "alice,5,10,15,15\n"
+        "bob,0,0,0,15\n"
+    )
+
+
+def test_flask_validation_errors_rendered_inline():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post("/grade", data={}, content_type="multipart/form-data")
+    assert resp.status_code == 400
+    page = resp.get_data(as_text=True)
+    assert "Please choose a submissions zip file." in page
+    assert "Please choose a rubric CSV file." in page
+
+
+def test_flask_upload_too_large(monkeypatch):
+    import app as app_module
+
+    monkeypatch.setitem(app_module.app.config, "MAX_CONTENT_LENGTH", 1024)
+    client = app_module.app.test_client()
+    resp = client.post(
+        "/grade",
+        data={"submissions": (io.BytesIO(b"x" * 5000), "big.zip")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 413
+    assert "limit" in resp.get_data(as_text=True)

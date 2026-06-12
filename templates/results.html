@@ -18,7 +18,7 @@
   {% endif %}
 
   <p class="actions">
-    <a class="button" href="{{ url_for('download', result_id=result.result_id) }}">Download grades.csv</a>
+    <a class="button" download="grades.csv" href="data:text/csv;charset=utf-8,{{ result.to_csv() | urlencode }}">Download grades.csv</a>
     <a class="back" href="{{ url_for('index') }}">Grade another</a>
   </p>
 
@@ -45,7 +45,7 @@
       </tbody>
     </table>
   </div>
-  <p class="hint">Hover a cell to see why the check passed or failed. The CSV download is generated from this exact result.</p>
+  <p class="hint">Hover a cell to see why the check passed or failed. The CSV download is embedded from this exact result.</p>
 </main>
 </body>
 </html>

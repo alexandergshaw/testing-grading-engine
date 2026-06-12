@@ -15,7 +15,32 @@ flask run                            # or: python app.py
 ```
 
 Open http://127.0.0.1:5000, upload `samples/sample_submissions.zip` and
-`samples/rubric_python.csv`, and click **Grade**.
+`samples/rubric_python.csv`, and click **Grade**. The grades CSV download is
+embedded directly in the results page, generated from the exact same result
+as the on-screen table.
+
+## Deploying to Vercel
+
+The app is fully stateless (no sessions, no server-side result store), so it
+runs as a Vercel serverless function out of the box:
+
+```powershell
+npm i -g vercel
+vercel          # preview deploy; `vercel --prod` for production
+```
+
+`api/index.py` exposes the Flask app and `vercel.json` rewrites all routes to
+it. Two platform limits to know about:
+
+- **Uploads are capped at 4 MB** on Vercel (the platform rejects bodies over
+  ~4.5 MB). Grade large class zips locally.
+- **Execution checks are always disabled on Vercel** (`python_runs`,
+  `run_command`, `output_contains`), regardless of `GRADING_ALLOW_EXEC` —
+  serverless has no student toolchains, and running untrusted code on shared
+  infrastructure is unsafe. All static checks work unchanged.
+
+Note the deployed URL is public — there is no auth. Use Vercel's deployment
+protection if that matters.
 
 ## Rubric CSV format
 
@@ -119,6 +144,7 @@ on .docx/.pdf files; they are imported lazily.
 ## Tests
 
 ```powershell
+pip install -r requirements-dev.txt
 python -m pytest
 ```
 

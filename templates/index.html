@@ -11,18 +11,18 @@
   <h1>Assignment Grading Engine</h1>
   <p class="sub">Deterministic, rule-based grading. No AI involved.</p>
 
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <ul class="errors">
-        {% for m in messages %}<li>{{ m }}</li>{% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
+  {% if errors %}
+    <ul class="errors">
+      {% for m in errors %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+  {% endif %}
 
-  {% if allow_exec %}
-    <p class="notice warn">Code execution is <strong>enabled</strong>: <code>python_runs</code> checks will execute student scripts on this machine.</p>
+  {% if on_vercel %}
+    <p class="notice">Running on Vercel: execution checks (<code>python_runs</code>, <code>run_command</code>, <code>output_contains</code>) are always disabled here, and uploads are limited to 4&nbsp;MB. Run the app locally for those.</p>
+  {% elif allow_exec %}
+    <p class="notice warn">Code execution is <strong>enabled</strong>: execution checks will run student code on this machine.</p>
   {% else %}
-    <p class="notice">Code execution is disabled, so <code>python_runs</code> checks are marked failed. Set <code>GRADING_ALLOW_EXEC=1</code> before starting the server to enable them.</p>
+    <p class="notice">Code execution is disabled, so execution checks (<code>python_runs</code>, <code>run_command</code>, <code>output_contains</code>) are marked failed. Set <code>GRADING_ALLOW_EXEC=1</code> before starting the server to enable them.</p>
   {% endif %}
 
   <form action="{{ url_for('grade') }}" method="post" enctype="multipart/form-data">
