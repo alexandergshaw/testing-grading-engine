@@ -139,3 +139,56 @@ table.results td.possible { color: var(--muted); }
 .of { color: inherit; opacity: 0.6; font-size: 0.8em; }
 
 .hint { color: var(--muted); font-size: 0.85rem; }
+
+.divider {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 2rem 0 0.75rem;
+}
+
+.paste-form textarea {
+  width: 100%;
+  background: var(--card);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+.paste-form textarea:focus { border-color: var(--accent); outline: none; }
+.paste-form button { margin-top: 0.75rem; }
+
+button.secondary {
+  background: var(--card);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+table.review {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.review th, table.review td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+table.review th { background: #f0f2f5; }
+table.review input, table.review select {
+  width: 100%;
+  min-width: 7rem;
+  box-sizing: border-box;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  background: #fff;
+}
+table.review input.narrow { min-width: 3.5rem; width: 4rem; }
+table.review td.grow { min-width: 14rem; }
+table.review td.rule { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+tr.needs-setup td { background: #fef7e0; }
+tr.needs-setup td.rule { color: #92600a; font-weight: 600; }

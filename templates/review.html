@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review Rubric</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="wide">
+  <h1>Review Rubric</h1>
+  <p class="sub">{{ rows | length }} criteria parsed deterministically from your paste. Confirm the suggested checks, fix highlighted rows, then upload the submissions zip and grade.</p>
+
+  {% if errors %}
+    <ul class="errors">
+      {% for m in errors %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <form action="{{ url_for('grade') }}" method="post" enctype="multipart/form-data">
+    <div class="table-wrap">
+      <table class="review">
+        <thead>
+          <tr><th>Criterion</th><th>Points</th><th>Check</th><th>Target (glob)</th><th>Params</th><th>Matched rule</th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="crit{% if row.needs_setup %} needs-setup{% endif %}">
+            <td class="grow"><input name="criterion" value="{{ row.criterion }}"></td>
+            <td><input name="points" value="{{ row.points }}" class="narrow"></td>
+            <td>
+              <select name="check_type">
+                <option value="">choose&hellip;</option>
+                {% for c in checks %}
+                <option value="{{ c.name }}" {% if c.name == row.check_type %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input name="target" value="{{ row.target }}"></td>
+            <td class="grow"><input name="params" value="{{ row.params }}"></td>
+            <td class="rule">{{ row.rule }}<input type="hidden" name="rule" value="{{ row.rule }}"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">Highlighted rows need attention: pick a check or fill in its required params. Params are <code>key=value</code> pairs separated by <code>;</code>. Target is a file glob relative to each student folder.</p>
+
+    <label class="dropzone">
+      <span class="dz-title">Submissions zip</span>
+      <span class="dz-hint">One folder per student</span>
+      <input type="file" name="submissions" accept=".zip" required>
+    </label>
+
+    <p class="actions">
+      <button type="submit">Grade</button>
+      <button type="button" id="dl-csv" class="secondary">Download rubric CSV</button>
+      <a class="back" href="{{ url_for('index') }}">Start over</a>
+    </p>
+  </form>
+</main>
+<script>
+  // Download the rubric as canonical CSV, built from the form's CURRENT values
+  // so edits are included - paste once, reuse the CSV next time.
+  document.getElementById("dl-csv").addEventListener("click", function () {
+    var rows = [["criterion", "points", "check_type", "target", "params"]];
+    document.querySelectorAll("tr.crit").forEach(function (tr) {
+      var get = function (n) { return tr.querySelector('[name="' + n + '"]').value; };
+      rows.push([get("criterion"), get("points"), get("check_type"), get("target"), get("params")]);
+    });
+    var esc = function (v) { return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var csv = rows.map(function (r) { return r.map(esc).join(","); }).join("\n") + "\n";
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "rubric.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  var zone = document.querySelector(".dropzone");
+  var input = zone.querySelector("input");
+  input.addEventListener("change", function () {
+    if (input.files.length) {
+      zone.querySelector(".dz-hint").textContent = input.files[0].name;
+      zone.classList.add("filled");
+    }
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove("dragover"); });
+  });
+  zone.addEventListener("drop", function (e) {
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      input.dispatchEvent(new Event("change"));
+    }
+  });
+</script>
+</body>
+</html>

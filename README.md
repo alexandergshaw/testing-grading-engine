@@ -42,6 +42,31 @@ it. Two platform limits to know about:
 Note the deployed URL is public — there is no auth. Use Vercel's deployment
 protection if that matters.
 
+## Pasting a rubric from your LMS
+
+Instead of writing a CSV, you can copy a rubric straight out of your LMS and
+paste it into the textbox on the upload page. Everything is deterministic —
+no LLM at any step:
+
+1. **Structure parsing** (`grading/paste_parser.py`) extracts criterion names
+   and point values. Recognized formats: LMS table copies (tab-separated, e.g.
+   Canvas), `Criterion name (10 points)`, `Criterion name … 10 pts`,
+   `Criterion / 10`, and a criterion line followed by a points line. Header
+   rows, "Total", and rating noise ("Full Marks") are filtered out.
+2. **Check suggestion** (`grading/suggest.py`) maps each criterion's wording
+   to a check via an ordered regex rule table — e.g. *"function called
+   calculate_average"* → `python_function_exists`, *"Main.java compiles"* →
+   `run_command command=javac Main.java`, *"at least 50 words"* →
+   `word_count min=50`. Every suggestion shows which rule produced it.
+3. **Review page**: the reconstructed rubric appears as an editable table.
+   Rows with no matching rule (or missing required params) are highlighted —
+   nothing is guessed silently; you pick the check. Then upload the zip and
+   grade. A **Download rubric CSV** button saves the (edited) rubric in the
+   canonical format so you only paste once per assignment.
+
+New phrasings your LMS uses can be supported by adding a rule to the table in
+`grading/suggest.py` — one regex plus a small builder function.
+
 ## Rubric CSV format
 
 Every rubric uses the same five columns; different assignments just have

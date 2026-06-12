@@ -46,6 +46,42 @@ def parse_params(raw: str) -> dict[str, str]:
     return params
 
 
+def build_criterion(
+    label: str, name: str, points_raw: str, check_type: str, target: str, params_raw: str
+) -> tuple[Criterion, list[str]]:
+    """Validate one criterion's raw fields; shared by the CSV and review-form paths."""
+    errors: list[str] = []
+    name = (name or "").strip()
+    if not name:
+        errors.append(f"{label}: empty criterion name")
+
+    points_raw = (points_raw or "").strip()
+    try:
+        points = float(points_raw)
+    except ValueError:
+        errors.append(f"{label}: points {points_raw!r} is not a number")
+        points = 0.0
+
+    check_type = (check_type or "").strip()
+    spec = CHECK_REGISTRY.get(check_type)
+    if spec is None:
+        known = ", ".join(sorted(CHECK_REGISTRY))
+        errors.append(f"{label}: unknown check_type {check_type!r} (known: {known})")
+
+    try:
+        params = parse_params(params_raw or "")
+    except ValueError as e:
+        errors.append(f"{label}: {e}")
+        params = {}
+
+    if spec is not None:
+        for p in spec.required_params:
+            if p not in params:
+                errors.append(f"{label}: check {check_type!r} requires param {p!r}")
+
+    return Criterion(name, points, check_type, (target or "").strip(), params), errors
+
+
 def parse_rubric(text: str) -> list[Criterion]:
     reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
     fieldnames = [(f or "").strip().lower() for f in (reader.fieldnames or [])]
@@ -66,36 +102,16 @@ def parse_rubric(text: str) -> list[Criterion]:
             continue  # blank line
         name = (row.get("criterion") or "").strip()
         label = f"row {lineno} ({name or '?'})"
-        if not name:
-            errors.append(f"{label}: empty criterion name")
-
-        points_raw = (row.get("points") or "").strip()
-        try:
-            points = float(points_raw)
-        except ValueError:
-            errors.append(f"{label}: points {points_raw!r} is not a number")
-            points = 0.0
-
-        check_type = (row.get("check_type") or "").strip()
-        spec = CHECK_REGISTRY.get(check_type)
-        if spec is None:
-            known = ", ".join(sorted(CHECK_REGISTRY))
-            errors.append(f"{label}: unknown check_type {check_type!r} (known: {known})")
-
-        try:
-            params = parse_params(row.get("params") or "")
-        except ValueError as e:
-            errors.append(f"{label}: {e}")
-            params = {}
-
-        if spec is not None:
-            for p in spec.required_params:
-                if p not in params:
-                    errors.append(f"{label}: check {check_type!r} requires param {p!r}")
-
-        criteria.append(
-            Criterion(name, points, check_type, (row.get("target") or "").strip(), params)
+        criterion, row_errors = build_criterion(
+            label,
+            name,
+            row.get("points") or "",
+            row.get("check_type") or "",
+            row.get("target") or "",
+            row.get("params") or "",
         )
+        criteria.append(criterion)
+        errors.extend(row_errors)
 
     if errors:
         raise RubricError(errors)

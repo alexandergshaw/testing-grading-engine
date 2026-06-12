@@ -91,9 +91,120 @@ def test_flask_validation_errors_rendered_inline():
     client = app_module.app.test_client()
     resp = client.post("/grade", data={}, content_type="multipart/form-data")
     assert resp.status_code == 400
+    assert "Please provide a rubric" in resp.get_data(as_text=True)
+
+    resp = client.post(
+        "/grade",
+        data={"rubric": (io.BytesIO(RUBRIC.encode()), "rubric.csv")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert "Please choose a submissions zip file." in resp.get_data(as_text=True)
+
+
+def _submission_zip():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("alice/main.py", "def avg(xs):\n    return 0\n")
+        zf.writestr("bob/notes.txt", "forgot")
+    buf.seek(0)
+    return buf
+
+
+EXPECTED_CSV = (
+    "Student,Has main.py,Defines avg,Total,Possible\n"
+    "alice,5,10,15,15\n"
+    "bob,0,0,0,15\n"
+)
+
+
+def _embedded_csv(page):
+    import re
+    import urllib.parse
+
+    match = re.search(r'href="data:text/csv;charset=utf-8,([^"]+)"', page)
+    assert match, "embedded CSV download link not found"
+    return urllib.parse.unquote(match.group(1))
+
+
+def test_parse_route_renders_review():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post(
+        "/parse",
+        data={"rubric_text": "Submitted main.py (5 points)\nUses the math module 10 pts"},
+    )
+    assert resp.status_code == 200
     page = resp.get_data(as_text=True)
-    assert "Please choose a submissions zip file." in page
-    assert "Please choose a rubric CSV file." in page
+    assert 'value="Submitted main.py"' in page
+    assert 'value="module=math"' in page  # suggestion prefilled
+    assert "file submitted" in page  # rule label shown
+
+
+def test_parse_route_unmapped_row_flagged():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post("/parse", data={"rubric_text": "Overall effort and style 10 pts"})
+    page = resp.get_data(as_text=True)
+    assert "needs-setup" in page
+    assert "no rule matched" in page
+
+
+def test_parse_route_no_criteria():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post("/parse", data={"rubric_text": "just prose, nothing useful"})
+    assert resp.status_code == 400
+    assert "Couldn&#39;t find any criteria" in resp.get_data(as_text=True)
+
+
+def test_grade_from_review_form_matches_csv_path():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post(
+        "/grade",
+        data={
+            "criterion": ["Has main.py", "Defines avg"],
+            "points": ["5", "10"],
+            "check_type": ["file_exists", "python_function_exists"],
+            "target": ["main.py", "*.py"],
+            "params": ["", "name=avg"],
+            "rule": ["", ""],
+            "submissions": (_submission_zip(), "submissions.zip"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    # Same rubric via form fields must produce the identical CSV as the CSV-upload path.
+    assert _embedded_csv(resp.get_data(as_text=True)) == EXPECTED_CSV
+
+
+def test_grade_from_review_form_validation_rerenders_review():
+    import app as app_module
+
+    client = app_module.app.test_client()
+    resp = client.post(
+        "/grade",
+        data={
+            "criterion": ["Broken row"],
+            "points": ["abc"],
+            "check_type": ["contains_text"],
+            "target": ["*"],
+            "params": [""],
+            "rule": ["x"],
+            "submissions": (_submission_zip(), "submissions.zip"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    page = resp.get_data(as_text=True)
+    assert "not a number" in page
+    assert "requires param" in page
+    assert 'value="Broken row"' in page  # edits preserved in re-rendered review
 
 
 def test_flask_upload_too_large(monkeypatch):
