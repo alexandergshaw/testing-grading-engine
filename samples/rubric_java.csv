@@ -1,0 +1,7 @@
+criterion,points,check_type,target,params
+Submitted Main.java,5,file_exists,Main.java,
+Declares a Main class,5,regex_match,*.java,pattern=class\s+Main
+Has a main method,10,regex_match,*.java,pattern=public\s+static\s+void\s+main
+Uses a loop,5,regex_match,*.java,pattern=\b(for|while)\s*\(
+Code compiles,15,run_command,,command=javac Main.java;timeout=30
+Prints the greeting,10,output_contains,,command=java Main;text=Hello

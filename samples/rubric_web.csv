@@ -1,0 +1,8 @@
+criterion,points,check_type,target,params
+Has index.html,5,file_exists,index.html,
+Has a stylesheet,5,file_exists,*.css,
+Page has a title,10,html_has_tag,index.html,tag=title
+Has an image with alt text,10,html_has_tag,index.html,tag=img;attr=alt
+Stylesheet styles body,10,css_has_selector,*.css,selector=body
+Links the stylesheet,10,regex_match,index.html,pattern=<link[^>]+stylesheet
+At least 3 pages,10,file_count,*.html,min=3

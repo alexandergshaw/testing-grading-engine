@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grading Engine</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main>
+  <h1>Assignment Grading Engine</h1>
+  <p class="sub">Deterministic, rule-based grading. No AI involved.</p>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul class="errors">
+        {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% if allow_exec %}
+    <p class="notice warn">Code execution is <strong>enabled</strong>: <code>python_runs</code> checks will execute student scripts on this machine.</p>
+  {% else %}
+    <p class="notice">Code execution is disabled, so <code>python_runs</code> checks are marked failed. Set <code>GRADING_ALLOW_EXEC=1</code> before starting the server to enable them.</p>
+  {% endif %}
+
+  <form action="{{ url_for('grade') }}" method="post" enctype="multipart/form-data">
+    <label class="dropzone">
+      <span class="dz-title">Submissions zip</span>
+      <span class="dz-hint">One folder per student</span>
+      <input type="file" name="submissions" accept=".zip" required>
+    </label>
+    <label class="dropzone">
+      <span class="dz-title">Rubric CSV</span>
+      <span class="dz-hint">criterion,points,check_type,target,params</span>
+      <input type="file" name="rubric" accept=".csv" required>
+    </label>
+    <button type="submit">Grade</button>
+  </form>
+
+  <details>
+    <summary>Rubric CSV format</summary>
+    <p>Five columns, same for every assignment — only the rows change:</p>
+    <p><code>criterion,points,check_type,target,params</code></p>
+    <ul class="schema">
+      <li><strong>criterion</strong> — display name; becomes a column in the grades CSV</li>
+      <li><strong>points</strong> — awarded all-or-nothing when the check passes</li>
+      <li><strong>check_type</strong> — one of the checks below</li>
+      <li><strong>target</strong> — file glob relative to each student folder (e.g. <code>*.py</code>, <code>index.html</code>)</li>
+      <li><strong>params</strong> — <code>key=value</code> pairs separated by <code>;</code></li>
+    </ul>
+    <table class="registry">
+      <thead><tr><th>check_type</th><th>required params</th><th>what it checks</th></tr></thead>
+      <tbody>
+        {% for check in checks %}
+        <tr>
+          <td><code>{{ check.name }}</code></td>
+          <td>{% for p in check.required_params %}<code>{{ p }}=</code> {% else %}&mdash;{% endfor %}</td>
+          <td>{{ check.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</main>
+<script>
+  // Progressive enhancement only: show the chosen filename and highlight on drag.
+  document.querySelectorAll(".dropzone").forEach(function (zone) {
+    var input = zone.querySelector("input");
+    input.addEventListener("change", function () {
+      if (input.files.length) {
+        zone.querySelector(".dz-hint").textContent = input.files[0].name;
+        zone.classList.add("filled");
+      }
+    });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add("dragover"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove("dragover"); });
+    });
+    zone.addEventListener("drop", function (e) {
+      if (e.dataTransfer.files.length) {
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event("change"));
+      }
+    });
+  });
+</script>
+</body>
+</html>
