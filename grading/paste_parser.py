@@ -6,17 +6,21 @@ tried in order:
 1. Tab-separated rows (copying an LMS rubric table - Canvas/Moodle/D2L):
    first cell is the criterion, rightmost points-looking cell is the points.
 2. Inline points: "Criterion name (10 points)", "Criterion name 10 pts",
-   "Criterion name / 10".
-3. Percent weights: criterion name followed by "25% of total grade" (on the
-   same or the next line); bare rating-level lines like "100%" / "75%" and
-   their descriptions are ignored. Points = the percent weight.
+   "Criterion name (out of 10)", "Criterion name worth 10 points",
+   "Criterion name / 10". "marks" is accepted wherever pts/points are.
+3. Percent weights: criterion name followed by "25% of total grade" or a
+   Blackboard-style "Weight: 25.00%" (on the same or the next line); bare
+   rating-level lines like "100%" / "75%" and their descriptions are
+   ignored. Points = the percent weight.
 4. Score blocks (D2L/Brightspace exports): each criterion is a block of
    rating levels ("Thorough / description / 20 pts" ...) ending in a
    "Criterion Score" footer with "/20 pts". The criterion name is the first
    line of the block; points come from the "/N pts" footer, falling back to
    the block's highest rating value when the footer is missing.
-5. Two-line pairs: criterion name on one line, "10 pts" (optionally with
-   rating text like "Full Marks") on the next.
+5. Two-line pairs: criterion name on one line, rating-level points lines
+   below it ("10 pts", "5 pts Full Marks", "5 to >3.0 pts"); the criterion
+   is worth the highest value in the run, so both Canvas (high-to-low) and
+   Moodle (low-to-high) rating orders work.
 
 Duplicate criterion names (e.g. an LMS footer that repeats the criteria
 column) are collapsed to the first occurrence.
@@ -29,7 +33,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_PTS_WORD = r"(?:pts?\.?|points?)"
+_PTS_WORD = r"(?:pts?\.?|points?|marks?)"
 _NUM = r"\d+(?:\.\d+)?"
 
 _JUNK_NAMES = {
@@ -41,6 +45,7 @@ _JUNK_NAMES = {
     "rating",
     "pts",
     "points",
+    "marks",
     "total",
     "total points",
     "description",
@@ -53,6 +58,12 @@ _CELL_PTS = re.compile(rf"^\s*({_NUM})\s*(?:to\s*>?\s*-?{_NUM}\s*)?{_PTS_WORD}\b
 _CELL_BARE_NUM = re.compile(rf"^\s*({_NUM})\s*$")
 
 _INLINE_PATTERNS = (
+    # "Criterion name (out of 10)" / "Criterion name worth 10 points"
+    re.compile(
+        rf"^(?P<name>.+?)[\s\-–—:|,(\[]+(?:out\s+of|worth)\s+(?P<pts>{_NUM})"
+        rf"\s*{_PTS_WORD}?\s*[\)\]]?\s*\.?\s*$",
+        re.I,
+    ),
     # "Criterion name (10 points)" / "[10 pts]"
     re.compile(rf"^(?P<name>.+?)\s*[\(\[]\s*(?P<pts>{_NUM})\s*{_PTS_WORD}\s*[\)\]]\s*$", re.I),
     # "Criterion name ... 10 pts"
@@ -61,8 +72,8 @@ _INLINE_PATTERNS = (
     re.compile(rf"^(?P<name>.+?)\s*/\s*(?P<pts>{_NUM})\s*$"),
 )
 
-# A points-only line, optionally followed by rating text ("5 pts Full Marks")
-_PTS_LINE = re.compile(rf"^\s*({_NUM})\s*{_PTS_WORD}\b.*$", re.I)
+# A points-only line: "5 pts", "5 pts Full Marks", "5 to >3.0 pts" (Canvas ranges)
+_PTS_LINE = re.compile(rf"^\s*({_NUM})\s*(?:to\s*>?\s*-?{_NUM}\s*)?{_PTS_WORD}\b.*$", re.I)
 _RATING_NOISE = re.compile(
     r"^(full marks|no marks|partial(?: credit)?|excellent|good|fair|poor|satisfactory"
     r"|unsatisfactory|exemplary|proficient|developing|emerging|beginning"
@@ -76,6 +87,11 @@ _GRADE_OF = r"%\s*of\s+(?:the\s+)?(?:total\s+)?grade\b"
 _WEIGHT_LINE = re.compile(rf"^\s*(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
 _WEIGHT_INLINE = re.compile(rf"^(?P<name>.+?)[\s\-–—:|,]+(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
 _BARE_PERCENT = re.compile(rf"^\s*{_NUM}\s*%\s*$")
+# Blackboard-style weights: "Weight 25.00%" / "Weight: 25%"
+_BB_WEIGHT_LINE = re.compile(rf"^\s*weight:?\s*(?P<pts>{_NUM})\s*%?\s*$", re.I)
+_BB_WEIGHT_INLINE = re.compile(
+    rf"^(?P<name>.+?)[\s\-–—:|,]+weight:?\s*(?P<pts>{_NUM})\s*%?\s*$", re.I
+)
 
 # Score-block rubrics (D2L/Brightspace): "Criterion Score" footers with
 # "/20 pts" (sometimes "-- /20 pts") carrying the criterion's max points.
@@ -156,13 +172,13 @@ def _parse_percent_weights(text: str) -> list[DraftCriterion]:
         line = raw.strip()
         if not line:
             continue
-        m = _WEIGHT_LINE.match(line)
+        m = _WEIGHT_LINE.match(line) or _BB_WEIGHT_LINE.match(line)
         if m:
             if prev is not None:
                 out.append(DraftCriterion(prev, float(m.group("pts"))))
                 prev = None
             continue
-        m = _WEIGHT_INLINE.match(line)
+        m = _WEIGHT_INLINE.match(line) or _BB_WEIGHT_INLINE.match(line)
         if m and not _is_junk(m.group("name")):
             out.append(DraftCriterion(_clean(m.group("name")), float(m.group("pts"))))
             prev = None
@@ -220,17 +236,30 @@ def _parse_score_blocks(text: str) -> list[DraftCriterion]:
 def _parse_two_line(text: str) -> list[DraftCriterion]:
     out: list[DraftCriterion] = []
     prev: str | None = None
+    pending: DraftCriterion | None = None  # criterion accumulating a run of rating lines
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
         m = _PTS_LINE.match(line)
         if m:
-            if prev is not None:
-                out.append(DraftCriterion(prev, float(m.group(1))))
-                prev = None  # later rating lines ("0 pts No Marks") are ignored
-        elif not _RATING_NOISE.match(line) and not _is_junk(line):
-            prev = _clean(line)
+            pts = float(m.group(1))
+            if pending is not None:
+                # a run of rating levels: the criterion is worth the highest
+                # (Canvas lists high-to-low, Moodle low-to-high)
+                pending = DraftCriterion(pending.name, max(pending.points, pts))
+            elif prev is not None:
+                pending = DraftCriterion(prev, pts)
+                prev = None
+            continue
+        if _RATING_NOISE.match(line) or _is_junk(line):
+            continue
+        if pending is not None:
+            out.append(pending)
+            pending = None
+        prev = _clean(line)
+    if pending is not None:
+        out.append(pending)
     return out
 
 

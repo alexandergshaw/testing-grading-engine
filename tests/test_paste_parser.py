@@ -61,6 +61,51 @@ def test_two_line_skips_rating_noise():
     assert names_pts(text) == [("Effort shown", 10.0)]
 
 
+def test_moodle_ascending_ratings_take_max():
+    text = (
+        "Criterion One\n"
+        "0 points\n"
+        "1 points\n"
+        "2 points\n"
+        "Criterion Two\n"
+        "0 points\n"
+        "5 points\n"
+    )
+    assert names_pts(text) == [("Criterion One", 2.0), ("Criterion Two", 5.0)]
+
+
+def test_canvas_range_rating_lines():
+    text = "Code compiles\n5 to >3.0 pts Full Marks\n3 to >0 pts Partial Credit\n"
+    assert names_pts(text) == [("Code compiles", 5.0)]
+
+
+def test_marks_vocabulary():
+    assert names_pts("Question 1 10 marks\nQuestion 2 5 marks\n") == [
+        ("Question 1", 10.0),
+        ("Question 2", 5.0),
+    ]
+    assert names_pts("Essay structure\n20 marks\n") == [("Essay structure", 20.0)]
+
+
+def test_out_of_and_worth_phrasing():
+    text = "Code quality (out of 10)\nEssay worth 25 points\nPresentation out of 5\n"
+    assert names_pts(text) == [
+        ("Code quality", 10.0),
+        ("Essay", 25.0),
+        ("Presentation", 5.0),
+    ]
+
+
+def test_blackboard_weight_lines():
+    text = "Organization\nWeight 25.00%\nGrammar and Mechanics\nWeight: 15%\n"
+    assert names_pts(text) == [("Organization", 25.0), ("Grammar and Mechanics", 15.0)]
+
+
+def test_blackboard_weight_inline():
+    text = "Organization - Weight 25%\nGrammar, Weight: 15.00%\n"
+    assert names_pts(text) == [("Organization", 25.0), ("Grammar", 15.0)]
+
+
 def test_decimal_points():
     text = "Partial criterion (2.5 pts)\n"
     assert names_pts(text) == [("Partial criterion", 2.5)]

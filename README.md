@@ -51,15 +51,18 @@ no LLM at any step:
 1. **Structure parsing** (`grading/paste_parser.py`) extracts criterion names
    and point values. Recognized formats: LMS table copies (tab-separated, e.g.
    Canvas), `Criterion name (10 points)`, `Criterion name … 10 pts`,
-   `Criterion / 10`, percent-weight rubrics (criterion followed by
-   `25% of total grade`, with `100%`/`75%` rating levels ignored; points =
-   the percent), D2L/Brightspace rating-block exports (criterion name, rating
-   levels each with their own `N pts`, and a `Criterion Score … /20 pts`
-   footer carrying the max points — falls back to the highest rating value if
-   the footer is missing), and a criterion line followed by a points line.
-   Header rows, titles, "Total", rating noise ("Full Marks", "Excellent",
-   "Satisfactory"), comment prompts, and duplicated criteria-column footers
-   are filtered out.
+   `Criterion (out of 10)`, `Criterion worth 10 points`, `Criterion / 10`,
+   percent-weight rubrics (criterion followed by `25% of total grade` or a
+   Blackboard-style `Weight: 25.00%`; points = the percent), D2L/Brightspace
+   rating-block exports (criterion name, rating levels each with their own
+   `N pts`, and a `Criterion Score … /20 pts` footer carrying the max points —
+   falls back to the highest rating value if the footer is missing), and a
+   criterion followed by rating-level points lines, where the criterion is
+   worth the highest value in the run (so Canvas's high-to-low and Moodle's
+   low-to-high rating orders both work, including `5 to >3.0 pts` ranges).
+   "marks" is accepted wherever pts/points are. Header rows, titles, "Total",
+   rating noise ("Full Marks", "Excellent", "Satisfactory"), comment prompts,
+   and duplicated criteria-column footers are filtered out.
 2. **Check suggestion** (`grading/suggest.py`) maps each criterion's wording
    to a check via an ordered regex rule table — e.g. *"function called
    calculate_average"* → `python_function_exists`, *"Main.java compiles"* →
