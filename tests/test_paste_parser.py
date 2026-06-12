@@ -136,6 +136,150 @@ def test_percent_weight_lms_paste():
     ]
 
 
+D2L_SCORE_BLOCK_PASTE = """INFO 1031 Assignment Rubric
+INFO 1031 Assignment Rubric
+Criteria\tRatings\tPoints
+Understanding of Agile Concepts
+
+Thorough
+Demonstrates a thorough understanding of Agile concepts, principles, and methodologies.
+20 pts
+
+Good
+Demonstrates a good understanding, with minor gaps or inaccuracies.
+15 pts
+
+Basic
+Demonstrates a basic understanding, with several gaps or inaccuracies.
+10 pts
+
+Limited
+Demonstrates limited understanding, with significant gaps or inaccuracies.
+5 pts
+
+No Marks
+Demonstrates no understanding of Agile concepts.
+0 pts
+Criterion Score
+--
+/20 pts
+Comment
+Leave a comment
+
+Application of Agile Practices
+
+Effectively
+Effectively applies Agile practices and techniques to the assignment.
+20 pts
+
+Mostly
+Mostly applies Agile practices effectively, with minor errors or omissions.
+15 pts
+
+Somewhat
+Somewhat applies Agile practices, with several errors or omissions.
+10 pts
+
+Poorly
+Poorly applies Agile practices, with significant errors or omissions.
+5 pts
+
+No Marks
+Does not apply Agile practices.
+0 pts
+Criterion Score
+--
+/20 pts
+Comment
+Leave a comment
+
+Clarity and Organization
+
+Well
+Information is clearly presented and well-organized.
+20 pts
+
+Mostly
+Information is mostly clear and organized, with minor issues.
+15 pts
+
+Somewhat
+Information is somewhat clear and organized, with several issues.
+10 pts
+
+Poorly
+Information is unclear and poorly organized, with significant issues.
+5 pts
+
+No Marks
+Information is unclear and disorganized.
+0 pts
+Criterion Score
+--
+/20 pts
+Comment
+Leave a comment
+
+Critical Thinking and Analysis
+
+Strong
+Demonstrates strong critical thinking and thorough analysis.
+20 pts
+
+Good
+Demonstrates good critical thinking and analysis, with minor gaps.
+15 pts
+
+Basic
+Demonstrates basic critical thinking and analysis, with several gaps.
+10 pts
+
+Limited
+Demonstrates limited critical thinking and analysis, with significant gaps.
+5 pts
+
+No Marks
+Demonstrates no critical thinking or analysis.
+0 pts
+Criterion Score
+--
+/20 pts
+Comment
+Leave a comment
+
+Adherence to Guidelines
+
+Fully
+Fully adheres to assignment guidelines and submission requirements.
+20 pts
+
+Mostly
+Mostly adheres to guidelines, with minor deviations.
+10 pts
+
+No Marks
+Does not adhere to guidelines or submission requirements.
+0 pts
+Criterion Score
+"""
+
+
+def test_d2l_score_block_paste():
+    assert names_pts(D2L_SCORE_BLOCK_PASTE) == [
+        ("Understanding of Agile Concepts", 20.0),
+        ("Application of Agile Practices", 20.0),
+        ("Clarity and Organization", 20.0),
+        ("Critical Thinking and Analysis", 20.0),
+        ("Adherence to Guidelines", 20.0),  # footer cut off: max rating used
+    ]
+
+
+def test_score_block_rating_descriptions_not_criteria():
+    rows = names_pts(D2L_SCORE_BLOCK_PASTE)
+    assert all("Demonstrates" not in name for name, _ in rows)
+    assert all("INFO 1031" not in name for name, _ in rows)  # title filtered
+
+
 def test_percent_weight_inline():
     text = "Clarity & Organization - 25% of total grade\nEffort: 75% of grade\n"
     assert names_pts(text) == [("Clarity & Organization", 25.0), ("Effort", 75.0)]

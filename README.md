@@ -53,9 +53,13 @@ no LLM at any step:
    Canvas), `Criterion name (10 points)`, `Criterion name … 10 pts`,
    `Criterion / 10`, percent-weight rubrics (criterion followed by
    `25% of total grade`, with `100%`/`75%` rating levels ignored; points =
-   the percent), and a criterion line followed by a points line. Header rows,
-   "Total", rating noise ("Full Marks", "Excellent", "Satisfactory"), and
-   duplicated criteria-column footers are filtered out.
+   the percent), D2L/Brightspace rating-block exports (criterion name, rating
+   levels each with their own `N pts`, and a `Criterion Score … /20 pts`
+   footer carrying the max points — falls back to the highest rating value if
+   the footer is missing), and a criterion line followed by a points line.
+   Header rows, titles, "Total", rating noise ("Full Marks", "Excellent",
+   "Satisfactory"), comment prompts, and duplicated criteria-column footers
+   are filtered out.
 2. **Check suggestion** (`grading/suggest.py`) maps each criterion's wording
    to a check via an ordered regex rule table — e.g. *"function called
    calculate_average"* → `python_function_exists`, *"Main.java compiles"* →

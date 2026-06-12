@@ -10,7 +10,12 @@ tried in order:
 3. Percent weights: criterion name followed by "25% of total grade" (on the
    same or the next line); bare rating-level lines like "100%" / "75%" and
    their descriptions are ignored. Points = the percent weight.
-4. Two-line pairs: criterion name on one line, "10 pts" (optionally with
+4. Score blocks (D2L/Brightspace exports): each criterion is a block of
+   rating levels ("Thorough / description / 20 pts" ...) ending in a
+   "Criterion Score" footer with "/20 pts". The criterion name is the first
+   line of the block; points come from the "/N pts" footer, falling back to
+   the block's highest rating value when the footer is missing.
+5. Two-line pairs: criterion name on one line, "10 pts" (optionally with
    rating text like "Full Marks") on the next.
 
 Duplicate criterion names (e.g. an LMS footer that repeats the criteria
@@ -72,6 +77,14 @@ _WEIGHT_LINE = re.compile(rf"^\s*(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
 _WEIGHT_INLINE = re.compile(rf"^(?P<name>.+?)[\s\-–—:|,]+(?P<pts>{_NUM})\s*{_GRADE_OF}.*$", re.I)
 _BARE_PERCENT = re.compile(rf"^\s*{_NUM}\s*%\s*$")
 
+# Score-block rubrics (D2L/Brightspace): "Criterion Score" footers with
+# "/20 pts" (sometimes "-- /20 pts") carrying the criterion's max points.
+_SCORE_PTS = re.compile(rf"^(?:--\s*)?/\s*(?P<pts>{_NUM})\s*{_PTS_WORD}\b.*$", re.I)
+_BLOCK_BOUNDARY = re.compile(r"^(criterion score|comments?|leave a comment)$", re.I)
+_SCORE_BLOCK_MARKER = re.compile(
+    rf"^(?:criterion score|(?:--\s*)?/\s*{_NUM}\s*{_PTS_WORD}\b.*)$", re.I | re.M
+)
+
 
 @dataclass(frozen=True)
 class DraftCriterion:
@@ -88,6 +101,14 @@ def _is_junk(name: str) -> bool:
     if not cleaned or cleaned.lower() in _JUNK_NAMES:
         return True
     return _CELL_BARE_NUM.match(cleaned) is not None
+
+
+def _is_header_line(line: str) -> bool:
+    """A copied table header like 'Criteria<tab>Ratings<tab>Points'."""
+    if "\t" not in line:
+        return False
+    cells = [c.strip().lower() for c in line.split("\t") if c.strip()]
+    return bool(cells) and all(c in _JUNK_NAMES for c in cells)
 
 
 def _cell_points(cell: str) -> float | None:
@@ -155,6 +176,47 @@ def _parse_percent_weights(text: str) -> list[DraftCriterion]:
     return out
 
 
+def _parse_score_blocks(text: str) -> list[DraftCriterion]:
+    if not _SCORE_BLOCK_MARKER.search(text):
+        return []
+    out: list[DraftCriterion] = []
+    expecting_name = True  # the first text line of each block is the criterion
+    current_name: str | None = None
+    block_max: float | None = None  # highest rating value, fallback points
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line == "--":
+            continue
+        if _is_header_line(line) or _is_junk(line):
+            expecting_name = True
+            continue
+        m = _SCORE_PTS.match(line)
+        if m:
+            if current_name is not None:
+                out.append(DraftCriterion(current_name, float(m.group("pts"))))
+                current_name = None
+                block_max = None
+            expecting_name = True
+            continue
+        if _BLOCK_BOUNDARY.match(line):
+            expecting_name = True
+            continue
+        m = _PTS_LINE.match(line)
+        if m:
+            pts = float(m.group(1))
+            block_max = pts if block_max is None else max(block_max, pts)
+            continue
+        if expecting_name and not _RATING_NOISE.match(line):
+            # overwrites a stale candidate (e.g. a title line) that never
+            # accumulated points before the next block started
+            current_name = _clean(line)
+            expecting_name = False
+            block_max = None
+    if current_name is not None and block_max is not None:
+        out.append(DraftCriterion(current_name, block_max))
+    return out
+
+
 def _parse_two_line(text: str) -> list[DraftCriterion]:
     out: list[DraftCriterion] = []
     prev: str | None = None
@@ -192,6 +254,8 @@ def parse_pasted_text(text: str) -> list[DraftCriterion]:
         rows = _parse_inline(text)
     if not rows:
         rows = _parse_percent_weights(text)
+    if not rows:
+        rows = _parse_score_blocks(text)
     if not rows:
         rows = _parse_two_line(text)
     return _dedupe(rows)
